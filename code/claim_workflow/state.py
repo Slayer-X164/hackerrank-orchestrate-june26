@@ -214,6 +214,13 @@ class EvidenceRequirement:
     applies_to: str
     minimum_image_evidence: str
 
+@dataclass(slots=True)
+class AggregatedImageFindings:
+    visible_parts: set[str]
+    issue_types: set[str]
+    quality_flags: set[str]
+    best_image_id: str | None
+    supporting_image_ids: list[str]
 
 class ClaimWorkflowState(TypedDict):
     """Single shared workflow state passed across all LangGraph nodes."""
@@ -223,7 +230,7 @@ class ClaimWorkflowState(TypedDict):
     dataset_root: str
     model_config: WorkflowModelConfig
     claim_record: ClaimRecord
-    user_history: UserHistory | None 
+    user_history: UserHistory | None
     evidence_requirements: list[EvidenceRequirement]
     image_ids: list[str]
     parsed_claim: NotRequired[ParsedClaim]
