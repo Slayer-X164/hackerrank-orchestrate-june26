@@ -118,6 +118,16 @@ class ClaimRecord:
     user_claim: str
     claim_object: ClaimObject
 
+@dataclass(slots=True)
+class UserHistory:
+    user_id: str
+    past_claim_count: int
+    accept_claim: int
+    manual_review_claim: int
+    rejected_claim: int
+    last_90_days_claim_count: int
+    history_flags: str
+    history_summary: str
 
 @dataclass(slots=True)
 class ParsedClaim:
@@ -213,7 +223,7 @@ class ClaimWorkflowState(TypedDict):
     dataset_root: str
     model_config: WorkflowModelConfig
     claim_record: ClaimRecord
-    user_history: dict[str, Any] | None
+    user_history: UserHistory | None 
     evidence_requirements: list[EvidenceRequirement]
     image_ids: list[str]
     parsed_claim: NotRequired[ParsedClaim]
@@ -232,7 +242,7 @@ def create_initial_state(
     repo_root: str,
     dataset_root: str,
     claim_record: ClaimRecord,
-    user_history: dict[str, Any] | None = None,
+    user_history: UserHistory | None = None,
     evidence_requirements: list[EvidenceRequirement] | None = None,
     model_config: WorkflowModelConfig | None = None,
 ) -> ClaimWorkflowState:
