@@ -20,6 +20,7 @@ from typing import Any, Literal, TypedDict
 from typing_extensions import NotRequired
 
 ClaimObject = Literal["car", "laptop", "package"]
+RequirementClaimObject = ClaimObject | Literal["all"]
 ClaimStatus = Literal["supported", "contradicted", "not_enough_information"]
 IssueType = Literal[
     "dent",
@@ -52,6 +53,43 @@ RiskFlag = Literal[
     "user_history_risk",
     "manual_review_required",
 ]
+CarObjectPart = Literal[
+    "front_bumper",
+    "rear_bumper",
+    "door",
+    "hood",
+    "windshield",
+    "side_mirror",
+    "headlight",
+    "taillight",
+    "fender",
+    "quarter_panel",
+    "body",
+    "unknown",
+]
+LaptopObjectPart = Literal[
+    "screen",
+    "keyboard",
+    "trackpad",
+    "hinge",
+    "lid",
+    "corner",
+    "port",
+    "base",
+    "body",
+    "unknown",
+]
+PackageObjectPart = Literal[
+    "box",
+    "package_corner",
+    "package_side",
+    "seal",
+    "label",
+    "contents",
+    "item",
+    "unknown",
+]
+ObjectPart = CarObjectPart | LaptopObjectPart | PackageObjectPart
 WorkflowNodeName = Literal[
     "load_claim",
     "analyze_images",
@@ -67,7 +105,7 @@ class WorkflowModelConfig:
     """Static model settings for future LLM and VLM integration."""
 
     provider: str = "langchain-openrouter"
-    model_name: str = "openrouter/openai/gpt-oss-120b:free"
+    model_name: str = "openai/gpt-oss-120b:free"
     temperature: float = 0.0
 
 
@@ -86,8 +124,10 @@ class ParsedClaim:
     """Structured interpretation of the user conversation."""
 
     claim_summary: str
-    claimed_issue: str | None = None
-    claimed_object_part: str | None = None
+    claimed_issue_text: str | None = None
+    claimed_object_part_text: str | None = None
+    claimed_issue: IssueType | None = None
+    claimed_object_part: ObjectPart | None = None
     severity_hint: str | None = None
 
 
@@ -97,21 +137,39 @@ class ImageAnalysis:
 
     image_path: str
     image_id: str
-    visible_object: str | None = None
-    visible_object_part: str | None = None
+    visible_object: ClaimObject | None = None
+    visible_object_part: ObjectPart | None = None
     visible_issue_type: IssueType | None = None
     visible_severity: Severity | None = None
     quality_flags: list[RiskFlag] | None = None
+    relevance_flags: list[RiskFlag] | None = None
+    trust_flags: list[RiskFlag] | None = None
+    is_usable: bool = True
+    is_relevant: bool | None = None
+    claimed_part_visible: bool | None = None
+    claimed_part_clear: bool | None = None
+    provides_context: bool | None = None
+    correct_orientation: bool | None = None
     notes: str | None = None
+    confidence: float | None = None
+    supports_claim: bool | None = None
+    contradicts_claim: bool | None = None
+    relevance_score: float | None = None
+    selection_rationale: str | None = None
 
 
 @dataclass(slots=True)
 class EvidenceAssessment:
     """Result of comparing observed evidence against the minimum requirements."""
 
+    evidence_standard_met_reason: str
     evidence_standard_met: bool
     valid_image: bool
     unmet_requirements: list[str]
+    applied_requirement_ids: list[str]
+    satisfied_requirement_ids: list[str]
+    failed_requirement_ids: list[str]
+    supporting_image_ids: list[str]
     rationale: str
 
 
@@ -121,6 +179,7 @@ class RiskAssessment:
 
     risk_flags: list[RiskFlag]
     rationale: str
+    risk_justification: str
 
 
 @dataclass(slots=True)
@@ -128,11 +187,22 @@ class VerificationDecision:
     """Final structured decision before output formatting."""
 
     issue_type: IssueType
-    object_part: str
+    object_part: ObjectPart
     claim_status: ClaimStatus
     claim_status_justification: str
     supporting_image_ids: list[str]
     severity: Severity
+    claim_conflict_score: float | None = None
+
+
+@dataclass(slots=True)
+class EvidenceRequirement:
+    """Normalized evidence requirement row from the dataset."""
+
+    requirement_id: str
+    claim_object: RequirementClaimObject
+    applies_to: str
+    minimum_image_evidence: str
 
 
 class ClaimWorkflowState(TypedDict):
@@ -144,7 +214,7 @@ class ClaimWorkflowState(TypedDict):
     model_config: WorkflowModelConfig
     claim_record: ClaimRecord
     user_history: dict[str, Any] | None
-    evidence_requirements: list[dict[str, str]]
+    evidence_requirements: list[EvidenceRequirement]
     image_ids: list[str]
     parsed_claim: NotRequired[ParsedClaim]
     image_analyses: NotRequired[list[ImageAnalysis]]
@@ -163,7 +233,7 @@ def create_initial_state(
     dataset_root: str,
     claim_record: ClaimRecord,
     user_history: dict[str, Any] | None = None,
-    evidence_requirements: list[dict[str, str]] | None = None,
+    evidence_requirements: list[EvidenceRequirement] | None = None,
     model_config: WorkflowModelConfig | None = None,
 ) -> ClaimWorkflowState:
     """Create the shared state object used by every workflow node.

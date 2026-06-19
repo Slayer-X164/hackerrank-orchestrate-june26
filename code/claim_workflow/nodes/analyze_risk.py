@@ -13,7 +13,7 @@ from ..state import ClaimWorkflowState, RiskAssessment, RiskFlag
 
 
 def analyze_risk_node(state: ClaimWorkflowState) -> ClaimWorkflowState:
-    """Attach a placeholder risk assessment to the shared state."""
+    """Attach a deterministic risk assessment to the shared state."""
 
     history_flags: list[str] = []
     if state["user_history"]:
@@ -21,13 +21,25 @@ def analyze_risk_node(state: ClaimWorkflowState) -> ClaimWorkflowState:
         if raw_flags != "none":
             history_flags = raw_flags.split(";")
 
-    risk_flags = cast(list[RiskFlag], history_flags or ["none"])
+    image_quality_flags = {
+        flag
+        for analysis in state.get("image_analyses", [])
+        for flag in (analysis.quality_flags or [])
+    }
+    combined_flags = list(dict.fromkeys([*history_flags, *sorted(image_quality_flags)]))
+    risk_flags = cast(list[RiskFlag], combined_flags or ["none"])
     state["risk_assessment"] = RiskAssessment(
         risk_flags=risk_flags,
         rationale=(
-            "Stub risk assessment only. This node should later merge history "
-            "signals with image-derived review risks."
+            "Deterministic mock risk assessment merged history flags with any "
+            "image quality flags."
+        ),
+        risk_justification=(
+            "Risk flags were derived from preloaded user history and mock "
+            "image-analysis quality signals."
         ),
     )
-    state["trace"].append("analyze_risk: attached placeholder risk assessment")
+    state["trace"].append(
+        "analyze_risk: merged deterministic history and image-derived risk flags"
+    )
     return state

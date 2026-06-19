@@ -26,7 +26,9 @@ def format_output_node(state: ClaimWorkflowState) -> ClaimWorkflowState:
             str(evidence.evidence_standard_met).lower() if evidence else "false"
         ),
         "evidence_standard_met_reason": (
-            evidence.rationale if evidence else "Evidence assessment unavailable."
+            evidence.evidence_standard_met_reason
+            if evidence
+            else "Evidence assessment unavailable."
         ),
         "risk_flags": (
             ";".join(risk.risk_flags) if risk and risk.risk_flags else "none"
