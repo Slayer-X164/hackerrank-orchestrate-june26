@@ -7,6 +7,7 @@ from ..state import (
     IssueType,
     Severity,
     RiskFlag,
+    AggregatedImageFindings,
 )
 from pathlib import Path
 import base64
@@ -31,6 +32,12 @@ def analyze_single_image(
 
     with open(image_file, "rb") as f:
         image_b64 = base64.b64encode(f.read()).decode("utf-8")
+
+    print("=" * 50)
+    print("IMAGE PATH:", image_path)
+    print("IMAGE ID:", image_id)
+    print("INDEX:", index)
+    print("=" * 50)
 
     llm = ChatOpenRouter(
         model="nvidia/nemotron-nano-12b-v2-vl:free",
@@ -130,7 +137,7 @@ JSON schema:
             content = content.rsplit("```", 1)[0]
 
         content = content.strip()
-        pprint(f"passed content {content}")
+
         result = json.loads(content)
     except Exception as e:
         print("something went wrong image json ", e)
@@ -176,7 +183,6 @@ JSON schema:
             "claimed_part_clear",
             False,
         ),
-
         provides_context=index > 0,
         correct_orientation=True,
         notes=result.get("notes"),
@@ -185,11 +191,85 @@ JSON schema:
         selection_rationale=("Selected by vision model analysis."),
     )
 
-def aggregate_image_findings(image_analyis: ImageAnalysis) -> ClaimWorkflowState:
-    ...
+
+def aggregate_image_findings(
+    analyses: list[ImageAnalysis],
+) -> AggregatedImageFindings:
+
+    visible_parts = set()
+    visible_issue_types = set()
+    quality_flags = set()
+
+    supporting_image_ids = []
+
+    usable_image_count = 0
+
+    best_image_id = None
+    highest_confidence = 0.0
+
+    damage_evidence = []
+
+    for analysis in analyses:
+
+        if analysis.visible_object_part:
+            visible_parts.add(analysis.visible_object_part)
+
+        if analysis.visible_issue_type:
+            visible_issue_types.add(analysis.visible_issue_type)
+
+        for flag in analysis.quality_flags:
+            if flag != "none":
+                quality_flags.add(flag)
+
+        if analysis.claimed_part_clear:
+            usable_image_count += 1
+
+        # Damage evidence candidate
+        if (
+            analysis.visible_issue_type
+            and analysis.visible_issue_type not in ["none", "unknown"]
+        ):
+            damage_evidence.append(analysis)
+
+        # Supporting image
+        if (
+            analysis.claimed_part_visible
+            and analysis.visible_issue_type not in ["none", "unknown"]
+        ):
+            supporting_image_ids.append(analysis.image_id)
+
+    # Prefer image that actually shows damage
+    if damage_evidence:
+        best_analysis = max(
+            damage_evidence,
+            key=lambda a: a.confidence,
+        )
+    elif analyses:
+        best_analysis = max(
+            analyses,
+            key=lambda a: a.confidence,
+        )
+    else:
+        best_analysis = None
+
+    if best_analysis:
+        best_image_id = best_analysis.image_id
+        highest_confidence = best_analysis.confidence
+
+    return AggregatedImageFindings(
+        visible_parts=sorted(visible_parts),
+        visible_issue_types=sorted(visible_issue_types),
+        quality_flags=sorted(quality_flags),
+        usable_image_count=usable_image_count,
+        supporting_image_ids=supporting_image_ids,
+        best_image_id=best_image_id,
+        highest_confidence=highest_confidence,
+    )
+
 
 def analyze_images_node(state: ClaimWorkflowState) -> ClaimWorkflowState:
-
+    print(state["claim_record"].image_paths)
+    print(state["image_ids"])
     analyses = [
         analyze_single_image(state, image_path, image_id, index)
         for index, (image_path, image_id) in enumerate(
@@ -197,6 +277,7 @@ def analyze_images_node(state: ClaimWorkflowState) -> ClaimWorkflowState:
         )
     ]
     state["image_analyses"] = analyses
+    state["aggregated_image_findings"] = aggregate_image_findings(analyses)
     state["trace"].append(
         "analyze_images: populated deterministic per-image mock findings"
     )

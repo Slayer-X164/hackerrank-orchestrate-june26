@@ -2,7 +2,7 @@ from data.loaders import load_claims, load_user_history, load_evidence_requireme
 from pprint import pprint
 from claim_workflow.state import create_initial_state
 from claim_workflow.graph import build_claim_verification_graph
-from claim_workflow.nodes.analyze_images import analyze_single_image
+
 
 claims = load_claims("./dataset")
 history_map = load_user_history("./dataset")
@@ -19,20 +19,14 @@ state = create_initial_state(
     evidence_requirements=requirements,
 )
 
-analysis = analyze_single_image(
-    state,
-    claim.image_paths[0],
-    "img_1",
-    0,
-)
 
-print(analysis)
+# print(analysis)
 
-# graph = build_claim_verification_graph()
+graph = build_claim_verification_graph()
 
-# result = graph.invoke(state)
+result = graph.invoke(state)
 
-# pprint(result["formatted_output"])
+pprint(result["aggregated_image_findings"])
 
 
 

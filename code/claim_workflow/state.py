@@ -222,6 +222,18 @@ class AggregatedImageFindings:
     best_image_id: str | None
     supporting_image_ids: list[str]
 
+@dataclass(slots=True)
+class AggregatedImageFindings:
+    visible_parts: list[str]
+    visible_issue_types: list[str]
+    quality_flags: list[RiskFlag]
+
+    usable_image_count: int
+    supporting_image_ids: list[str]
+
+    best_image_id: str | None
+    highest_confidence: float
+
 class ClaimWorkflowState(TypedDict):
     """Single shared workflow state passed across all LangGraph nodes."""
 
@@ -232,6 +244,7 @@ class ClaimWorkflowState(TypedDict):
     claim_record: ClaimRecord
     user_history: UserHistory | None
     evidence_requirements: list[EvidenceRequirement]
+    aggregated_image_findings: NotRequired[AggregatedImageFindings]
     image_ids: list[str]
     parsed_claim: NotRequired[ParsedClaim]
     image_analyses: NotRequired[list[ImageAnalysis]]
