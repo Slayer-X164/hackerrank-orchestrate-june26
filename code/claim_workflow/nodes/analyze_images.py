@@ -27,20 +27,16 @@ def analyze_single_image(
     index: int,
 ) -> ImageAnalysis:
     claim_record = state["claim_record"]
-    print("Analyzing:", image_path)
     image_file = Path(state["dataset_root"]) / image_path
 
     with open(image_file, "rb") as f:
         image_b64 = base64.b64encode(f.read()).decode("utf-8")
 
-    print("=" * 50)
-    print("IMAGE PATH:", image_path)
-    print("IMAGE ID:", image_id)
-    print("INDEX:", index)
+    print("ANALYSIS IMAGE PATH:", image_path)
     print("=" * 50)
 
     llm = ChatOpenRouter(
-        model="nvidia/nemotron-nano-12b-v2-vl:free",
+        model="qwen/qwen3-vl-30b-a3b-instruct",
         base_url="https://openrouter.ai/api/v1",
         api_key=os.environ["OPENROUTER_API_KEY"],
         temperature=0,
@@ -268,8 +264,7 @@ def aggregate_image_findings(
 
 
 def analyze_images_node(state: ClaimWorkflowState) -> ClaimWorkflowState:
-    print(state["claim_record"].image_paths)
-    print(state["image_ids"])
+
     analyses = [
         analyze_single_image(state, image_path, image_id, index)
         for index, (image_path, image_id) in enumerate(

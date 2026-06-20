@@ -10,51 +10,61 @@ from __future__ import annotations
 from ..state import ClaimWorkflowState, VerificationDecision
 
 
-def verify_claim_node(state: ClaimWorkflowState) -> ClaimWorkflowState:
-    """Attach a deterministic verification decision to the shared state."""
+def verify_claim_node(
+    state: ClaimWorkflowState,
+) -> ClaimWorkflowState:
 
-    parsed_claim = state.get("parsed_claim")
-    evidence = state.get("evidence_assessment")
-    analyses = state.get("image_analyses", [])
-    primary_analysis = next((analysis for analysis in analyses if analysis.supports_claim), None)
+    findings = state["aggregated_image_findings"]
 
-    issue_type = (
-        primary_analysis.visible_issue_type
-        if primary_analysis and primary_analysis.visible_issue_type
-        else parsed_claim.claimed_issue
-        if parsed_claim and parsed_claim.claimed_issue
-        else "unknown"
-    )
-    object_part = (
-        primary_analysis.visible_object_part
-        if primary_analysis and primary_analysis.visible_object_part
-        else parsed_claim.claimed_object_part
-        if parsed_claim and parsed_claim.claimed_object_part
-        else "unknown"
-    )
-    supporting_image_ids = evidence.supporting_image_ids if evidence else []
-    evidence_standard_met = evidence.evidence_standard_met if evidence else False
-    claim_status = "supported" if evidence_standard_met else "not_enough_information"
-    severity = (
-        primary_analysis.visible_severity
-        if primary_analysis and primary_analysis.visible_severity
-        else "unknown"
-    )
+    damage_types = [
+        issue
+        for issue in findings.visible_issue_types
+        if issue not in ["none", "unknown"]
+    ]
 
+    # evidence quality
+    if findings.usable_image_count == 0:
+        claim_status = "not_enough_information"
+
+    elif damage_types:
+        claim_status = "supported"
+
+    elif findings.visible_issue_types == ["none"]:
+        claim_status = "contradicted"
+
+    else:
+        claim_status = "not_enough_information"
+
+    issue_type = damage_types[0] if damage_types else "unknown"
+
+    object_part = findings.visible_parts[0] if findings.visible_parts else "unknown"
+
+    if claim_status == "supported":
+        justification = f"Visible {issue_type} detected on {object_part}."
+    elif claim_status == "contradicted":
+        justification = "Claimed area is visible but no damage was detected."
+    else:
+        justification = "Submitted images do not provide enough evidence."
+
+    confidence = findings.highest_confidence
+    if claim_status == "supported":
+        conflict_score = 0.0
+    elif claim_status == "contradicted":
+        conflict_score = 1.0
+    else:
+        conflict_score = 0.5
+        
     state["verification_decision"] = VerificationDecision(
         issue_type=issue_type,
         object_part=object_part,
         claim_status=claim_status,
-        claim_status_justification=(
-            "Deterministic mock workflow found at least one supporting image."
-            if evidence_standard_met
-            else "Deterministic mock workflow could not confirm the claim from the available images."
-        ),
-        supporting_image_ids=supporting_image_ids,
-        severity=severity,
-        claim_conflict_score=0.0 if evidence_standard_met else 0.5,
+        claim_status_justification=justification,
+        supporting_image_ids=findings.supporting_image_ids,
+        severity=("medium" if claim_status == "supported" else "unknown"),
+        claim_conflict_score=(conflict_score),
     )
-    state["trace"].append(
-        "verify_claim: produced deterministic status, issue, part, and severity"
-    )
+
+    state["trace"].append(f"verify_claim: status={claim_status}")
+    print("\n=== DECISION ===")
+    print(state["verification_decision"])
     return state

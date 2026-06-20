@@ -6,57 +6,67 @@ from ..state import (
     RiskFlag,
 )
 
-def analyze_risk_node(state: ClaimWorkflowState) -> ClaimWorkflowState:
-    """Attach a deterministic risk assessment to the shared state."""
+from typing import cast
 
-    history_flags: list[str] = []
+from ..state import (
+    ClaimWorkflowState,
+    RiskAssessment,
+    RiskFlag,
+)
+
+
+def analyze_risk_node(
+    state: ClaimWorkflowState,
+) -> ClaimWorkflowState:
+
+    risk_flags: set[str] = set()
 
     history = state.get("user_history")
 
     if history:
-        raw_flags = history.history_flags
 
-        if raw_flags != "none":
-            history_flags = [
+        if history.history_flags != "none":
+            risk_flags.update(
                 flag.strip()
-                for flag in raw_flags.split(";")
+                for flag in history.history_flags.split(";")
                 if flag.strip()
-            ]
+            )
 
-    image_quality_flags = {
-        flag
-        for analysis in state.get("image_analyses", [])
-        for flag in (analysis.quality_flags or [])
-    }
+        if history.last_90_days_claim_count >= 3:
+            risk_flags.add("user_history_risk")
 
-    combined_flags = list(
-        dict.fromkeys(
-            [
-                *history_flags,
-                *sorted(image_quality_flags),
-            ]
-        )
-    )
+        if history.rejected_claim >= 2:
+            risk_flags.add("user_history_risk")
 
-    risk_flags = cast(
-        list[RiskFlag],
-        combined_flags or ["none"],
-    )
+    for analysis in state.get("image_analyses", []):
+
+        for flag in analysis.quality_flags or []:
+
+            if flag != "none":
+                risk_flags.add(flag)
+
+    final_flags = sorted(risk_flags)
+
+    if not final_flags:
+        final_flags = ["none"]
 
     state["risk_assessment"] = RiskAssessment(
-        risk_flags=risk_flags,
+        risk_flags=cast(
+            list[RiskFlag],
+            final_flags,
+        ),
         rationale=(
-            "Deterministic mock risk assessment merged history flags "
-            "with image quality signals."
+            "Risk assessment derived from user claim history "
+            "and image quality indicators."
         ),
         risk_justification=(
-            "Risk flags were derived from user history and "
-            "image-analysis findings."
+            "Flags reflect historical claim behavior and "
+            "image-review findings."
         ),
     )
 
     state["trace"].append(
-        "analyze_risk: merged history and image-derived risk flags"
+        f"analyze_risk: {','.join(final_flags)}"
     )
 
     return state

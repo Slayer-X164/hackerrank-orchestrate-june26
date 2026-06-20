@@ -1,55 +1,59 @@
-"""Format Output node.
+from claim_workflow.state import ClaimWorkflowState
 
-This node converts the workflow's intermediate objects into the final CSV-ready
-schema expected by the challenge evaluator.
-"""
+def format_output_node(
+    state: ClaimWorkflowState,
+) -> ClaimWorkflowState:
 
-from __future__ import annotations
-
-from ..state import ClaimWorkflowState
-
-
-def format_output_node(state: ClaimWorkflowState) -> ClaimWorkflowState:
-    """Build a CSV-ready output dictionary from the shared state."""
-
-    claim_record = state["claim_record"]
-    evidence = state.get("evidence_assessment")
-    risk = state.get("risk_assessment")
-    decision = state.get("verification_decision")
+    claim = state["claim_record"]
+    verification = state["verification_decision"]
+    evidence = state["evidence_assessment"]
+    risk = state["risk_assessment"]
 
     state["formatted_output"] = {
-        "user_id": claim_record.user_id,
-        "image_paths": ";".join(claim_record.image_paths),
-        "user_claim": claim_record.user_claim,
-        "claim_object": claim_record.claim_object,
-        "evidence_standard_met": (
-            str(evidence.evidence_standard_met).lower() if evidence else "false"
-        ),
-        "evidence_standard_met_reason": (
-            evidence.evidence_standard_met_reason
-            if evidence
-            else "Evidence assessment unavailable."
-        ),
-        "risk_flags": (
-            ";".join(risk.risk_flags) if risk and risk.risk_flags else "none"
-        ),
-        "issue_type": decision.issue_type if decision else "unknown",
-        "object_part": decision.object_part if decision else "unknown",
-        "claim_status": (
-            decision.claim_status if decision else "not_enough_information"
-        ),
-        "claim_status_justification": (
-            decision.claim_status_justification
-            if decision
-            else "Claim verification unavailable."
-        ),
-        "supporting_image_ids": (
-            ";".join(decision.supporting_image_ids)
-            if decision and decision.supporting_image_ids
-            else "none"
-        ),
-        "valid_image": str(evidence.valid_image).lower() if evidence else "false",
-        "severity": decision.severity if decision else "unknown",
+
+        "user_id":
+            claim.user_id,
+
+        "image_paths":
+            ";".join(claim.image_paths),
+
+        "user_claim":
+            claim.user_claim,
+
+        "claim_object":
+            claim.claim_object,
+
+        "evidence_standard_met":
+            str(evidence.evidence_standard_met).lower(),
+
+        "evidence_standard_met_reason":
+            evidence.evidence_standard_met_reason,
+
+        "risk_flags":
+            ";".join(risk.risk_flags),
+
+        "issue_type":
+            verification.issue_type,
+
+        "object_part":
+            verification.object_part,
+
+        "claim_status":
+            verification.claim_status,
+
+        "claim_status_justification":
+            verification.claim_status_justification,
+
+        "supporting_image_ids":
+            ";".join(
+                verification.supporting_image_ids
+            ) or "none",
+
+        "valid_image":
+            str(evidence.valid_image).lower(),
+
+        "severity":
+            verification.severity,
     }
-    state["trace"].append("format_output: built CSV-ready output payload")
+
     return state
