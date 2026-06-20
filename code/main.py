@@ -24,7 +24,6 @@ from data.loaders import (
     load_evidence_requirements,
 )
 
-
 OUTPUT_COLUMNS = [
     "user_id",
     "image_paths",
@@ -52,7 +51,7 @@ def main() -> int:
 
     claims = load_claims(str(dataset_root))
 
-    # claims = claims[1:3]
+    # claims = claims[1:4]
 
     history_map = load_user_history(str(dataset_root))
     requirements = load_evidence_requirements(str(dataset_root))
